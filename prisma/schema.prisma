@@ -1,0 +1,116 @@
+// AI Code Review Assistant - Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  githubId     Int      @unique
+  login        String
+  email        String?
+  name         String?
+  avatarUrl    String?
+  accessToken  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  repositories Repository[]
+}
+
+model Repository {
+  id            String   @id @default(uuid())
+  ownerId       String
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  githubRepoId  Int      @unique
+  fullName      String
+  name          String
+  description   String?
+  language      String?
+  isPrivate     Boolean  @default(false)
+  webhookId     String?
+  stars         Int      @default(0)
+  openPrs       Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  pullRequests PullRequest[]
+  securityScans SecurityScan[]
+}
+
+model PullRequest {
+  id             String   @id @default(uuid())
+  repoId         String
+  repository     Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  githubPrNumber Int
+  title          String
+  description    String?
+  authorLogin    String
+  authorAvatar   String?
+  baseBranch     String
+  headBranch     String
+  additions      Int      @default(0)
+  deletions      Int      @default(0)
+  changedFiles   Int      @default(0)
+  status         String   @default("open")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  reviews Review[]
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  prId        String
+  pullRequest PullRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+  modelUsed   String?
+  summary     String?
+  riskScore   Float?
+  status      String   @default("pending")
+  rawOutput   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  comments ReviewComment[]
+}
+
+model ReviewComment {
+  id         String   @id @default(uuid())
+  reviewId   String
+  review     Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  filePath   String
+  lineNumber Int?
+  severity   String   @default("info")
+  category   String   @default("style")
+  message    String
+  suggestion String?
+  createdAt  DateTime @default(now())
+}
+
+model SecurityScan {
+  id          String   @id @default(uuid())
+  repoId      String
+  repository  Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  scanType    String
+  findings    String   // JSON string of findings
+  totalIssues Int      @default(0)
+  critical    Int      @default(0)
+  high        Int      @default(0)
+  medium      Int      @default(0)
+  low         Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  eventType String
+  userId    String?
+  repoId    String?
+  metadata  String?  // JSON string
+  createdAt DateTime @default(now())
+}

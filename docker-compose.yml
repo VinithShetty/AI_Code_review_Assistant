@@ -1,0 +1,11 @@
+# Root-level convenience wrapper
+# Use this file for quick local development:
+#   docker compose up -d
+#
+# For full control, use the infrastructure files directly:
+#   docker compose -f infrastructure/docker/docker-compose.yml up -d
+#   docker compose -f infrastructure/docker/docker-compose.yml \
+#                  -f infrastructure/docker/docker-compose.dev.yml up -d
+
+include:
+  - infrastructure/docker/docker-compose.yml
