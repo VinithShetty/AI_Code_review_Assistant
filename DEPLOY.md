@@ -1,7 +1,14 @@
 # Deploying CodeReview AI (VPS + Docker Compose)
 
-This deploys the app as a single Next.js container behind **Caddy** (automatic
-HTTPS), with the SQLite database persisted on a Docker volume.
+> **Want a free deploy with no domain?** See **[VERCEL.md](VERCEL.md)** (Vercel + Neon).
+> This VPS guide is the paid, self-hosted alternative.
+>
+> **Database note:** the app now uses **PostgreSQL** (Prisma provider `postgresql`).
+> To use this VPS path, run a Postgres database and point `DATABASE_URL` at it
+> (add a `postgres` service to `docker-compose.prod.yml`, or use a managed
+> Postgres) — the SQLite volume settings below are legacy.
+
+This deploys the app as a single Next.js container behind **Caddy** (automatic HTTPS).
 
 ```
 Internet ──▶ Caddy (:80/:443, auto-TLS) ──▶ web (Next.js :3000) ──▶ SQLite (volume)

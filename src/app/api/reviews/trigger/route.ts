@@ -6,6 +6,8 @@ import { getUserPullRequests, getPullRequestFiles } from "@/lib/github-api";
 import { reviewCodeWithAI, type AIReviewResult } from "@/lib/ai-review";
 
 export const runtime = "nodejs";
+// Allow the AI review (GitHub fetch + LLM call) up to 60s — the Vercel Hobby limit.
+export const maxDuration = 60;
 
 // Bounded review-input size so we never blow the model's context window.
 const MAX_REVIEW_CHARS = 12000;

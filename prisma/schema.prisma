@@ -5,8 +5,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled connection (Neon "-pooler"), used by the app
+  directUrl = env("DIRECT_URL")   // direct connection, used by `prisma db push` / migrations
 }
 
 model User {
