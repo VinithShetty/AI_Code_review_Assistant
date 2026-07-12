@@ -14,8 +14,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { mockRepos } from '@/data/mockData';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
 
 const navItems: { view: PageView; label: string; icon: React.ReactNode }[] = [
   { view: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -24,8 +24,37 @@ const navItems: { view: PageView; label: string; icon: React.ReactNode }[] = [
   { view: 'analytics', label: 'Analytics', icon: <BarChart3 className="h-4 w-4" /> },
 ];
 
+type SidebarRepo = { id: string; fullName: string };
+
 export default function Sidebar() {
   const { currentView, setView, sidebarOpen, setSidebarOpen } = useAppStore();
+
+  const [repos, setRepos] = useState<SidebarRepo[]>([]);
+  const [reposLoading, setReposLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRepos() {
+      try {
+        const res = await fetch('/api/github/repos');
+        if (!res.ok) throw new Error('Failed to load repositories');
+        const data: { repositories?: SidebarRepo[] } = await res.json();
+        if (!cancelled) {
+          setRepos(Array.isArray(data.repositories) ? data.repositories : []);
+        }
+      } catch {
+        if (!cancelled) setRepos([]);
+      } finally {
+        if (!cancelled) setReposLoading(false);
+      }
+    }
+
+    loadRepos();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <motion.aside
@@ -101,16 +130,32 @@ export default function Sidebar() {
             </div>
 
             <div className="flex flex-col gap-1">
-              {mockRepos.slice(0, 5).map((repo) => (
-                <button
-                  key={repo.id}
-                  onClick={() => setView('repositories')}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                >
-                  <GitBranch className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span className="truncate text-xs">{repo.fullName}</span>
-                </button>
-              ))}
+              {reposLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2"
+                  >
+                    <GitBranch className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/40" />
+                    <div className="h-3 w-full max-w-[140px] rounded bg-muted/50 animate-pulse" />
+                  </div>
+                ))
+              ) : repos.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground/70">
+                  No repositories yet
+                </div>
+              ) : (
+                repos.slice(0, 5).map((repo) => (
+                  <button
+                    key={repo.id}
+                    onClick={() => setView('repositories')}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    <GitBranch className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="truncate text-xs">{repo.fullName}</span>
+                  </button>
+                ))
+              )}
             </div>
           </motion.div>
         )}

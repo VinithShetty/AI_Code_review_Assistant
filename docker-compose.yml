@@ -1,11 +1,27 @@
-# Root-level convenience wrapper
-# Use this file for quick local development:
-#   docker compose up -d
+# Local dev compose for the *current* repo layout (single Next.js app at repo root).
 #
-# For full control, use the infrastructure files directly:
-#   docker compose -f infrastructure/docker/docker-compose.yml up -d
-#   docker compose -f infrastructure/docker/docker-compose.yml \
-#                  -f infrastructure/docker/docker-compose.dev.yml up -d
+# Note: The files under `infrastructure/docker/` include a microservices stack that expects
+# `backend/`, `frontend/`, and `ai_engine/` folders. Those folders are not present in this repo,
+# so that stack will not start successfully here.
 
-include:
-  - infrastructure/docker/docker-compose.yml
+version: "3.9"
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfiles/Dockerfile.web
+      target: development
+    container_name: ai-code-review-assistant-web
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # Helps file watching work reliably on Docker Desktop (Windows/macOS)
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - ./db:/app/db
+    command: ["npm", "run", "dev"]

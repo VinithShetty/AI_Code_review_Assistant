@@ -3,7 +3,6 @@
 import { useAppStore } from '@/stores/appStore';
 import { PageView } from '@/types';
 import {
-  Code2,
   LayoutDashboard,
   GitBranch,
   MessageSquare,
@@ -12,6 +11,7 @@ import {
   LogOut,
   Menu,
   X,
+  Repeat,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -19,9 +19,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { signOut } from 'next-auth/react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 const navItems: { view: PageView; label: string; icon: React.ReactNode }[] = [
@@ -32,8 +37,24 @@ const navItems: { view: PageView; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function Navbar() {
-  const { currentView, setView, isAuthenticated, user, logout, toggleSidebar } = useAppStore();
+  const { currentView, setView, isAuthenticated, user, toggleSidebar } = useAppStore();
+  const { toast } = useToast();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleSwitchAccount = async () => {
+    // GitHub keeps ONE active account per browser, and signing out of only this
+    // app leaves that GitHub session intact — so the same account would be reused.
+    // Bounce through GitHub's own logout (new tab) so a *different* GitHub account
+    // can sign in on this browser, then sign out of the app here.
+    window.open('https://github.com/logout', '_blank', 'noopener,noreferrer');
+    toast({
+      title: 'Switch GitHub account',
+      description:
+        'Sign out of GitHub in the tab that just opened, then click "Sign in with GitHub" here to use a different account.',
+    });
+    await signOut({ redirect: false });
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/50 bg-card/80 backdrop-blur-xl">
@@ -54,9 +75,14 @@ export default function Navbar() {
             onClick={() => setView('dashboard')}
             className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/20">
-              <Code2 className="h-5 w-5 text-emerald-400" />
-            </div>
+            <Image
+              src="/codereview-logo.png"
+              alt="CodeReview AI logo"
+              width={40}
+              height={40}
+              className="rounded-lg"
+              priority
+            />
             <span className="text-lg font-bold tracking-tight">
               Code<span className="text-emerald-400">Review</span> AI
             </span>
@@ -106,9 +132,14 @@ export default function Navbar() {
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5 text-sm font-medium">{user?.login}</div>
-                <DropdownMenuItem onClick={logout} className="text-red-400 focus:text-red-400">
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSwitchAccount}>
+                  <Repeat className="mr-2 h-4 w-4" />
+                  Switch account
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })} className="text-red-400 focus:text-red-400">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign out
                 </DropdownMenuItem>
@@ -116,12 +147,7 @@ export default function Navbar() {
             </DropdownMenu>
           ) : (
             <Button
-              onClick={() =>
-                useAppStore.getState().login({
-                  login: 'developer',
-                  avatarUrl: '',
-                })
-              }
+              onClick={() => router.push('/login')}
               className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
             >
               <LogIn className="h-4 w-4" />

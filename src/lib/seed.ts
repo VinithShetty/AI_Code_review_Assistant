@@ -3,6 +3,17 @@
 import { db } from "@/lib/db";
 
 export async function seedDatabase() {
+  // Real-data mode by default. The fake demo data below is only created when
+  // SEED_DEMO === 'true'. This keeps the app honest: a fresh account shows
+  // empty states until real reviews are run. The seeding code is preserved
+  // behind the flag so it can be re-enabled for local demos.
+  if (process.env.SEED_DEMO !== "true") {
+    console.log(
+      "Demo seed disabled (real-data mode). Set SEED_DEMO=true to enable."
+    );
+    return { disabled: true } as const;
+  }
+
   // Clean existing data (in reverse dependency order)
   await db.analyticsEvent.deleteMany();
   await db.securityScan.deleteMany();

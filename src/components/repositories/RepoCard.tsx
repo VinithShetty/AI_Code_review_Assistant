@@ -12,8 +12,10 @@ import {
   Globe,
   Unplug,
   Link2,
+  Sparkles,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ReviewPRModal from '@/components/repositories/ReviewPRModal';
 
 interface RepoCardProps {
   repo: Repository;
@@ -40,6 +42,8 @@ export default function RepoCard({
   index = 0,
 }: RepoCardProps) {
   const langDot = languageColors[repo.language || ''] || 'bg-gray-400';
+  const [ownerLogin, ...rest] = repo.fullName.split('/');
+  const repoName = rest.join('/');
 
   return (
     <motion.div
@@ -68,26 +72,40 @@ export default function RepoCard({
               )}
             </div>
 
-            {isConnected ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-400 flex-shrink-0"
-                onClick={() => onDisconnect?.(repo.id)}
-              >
-                <Unplug className="h-3 w-3 mr-1" />
-                Disconnect
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white flex-shrink-0"
-                onClick={() => onConnect?.(repo.id)}
-              >
-                <Link2 className="h-3 w-3 mr-1" />
-                Connect
-              </Button>
-            )}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {isConnected && repoName && (
+                <ReviewPRModal owner={ownerLogin} repo={repoName} fullName={repo.fullName}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+                  >
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    Review
+                  </Button>
+                </ReviewPRModal>
+              )}
+              {isConnected ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                  onClick={() => onDisconnect?.(repo.id)}
+                >
+                  <Unplug className="h-3 w-3 mr-1" />
+                  Disconnect
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={() => onConnect?.(repo.id)}
+                >
+                  <Link2 className="h-3 w-3 mr-1" />
+                  Connect
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3 mt-3 flex-wrap">

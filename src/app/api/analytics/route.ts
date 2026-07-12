@@ -1,20 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/analytics - Analytics data
+// Per-scan security score: 100 minus a weighted penalty for issues found.
+function scanSecurityScore(scan: {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+}): number {
+  const penalty = scan.critical * 20 + scan.high * 10 + scan.medium * 4 + scan.low * 1;
+  return Math.max(0, 100 - Math.min(100, penalty));
+}
+
+// GET /api/analytics - Real, DB-backed analytics.
+// Optional query param: ?days= (window for securityTrend, default 180)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const days = parseInt(searchParams.get("days") ?? "30");
+    const days = Math.max(1, parseInt(searchParams.get("days") ?? "180", 10) || 180);
 
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    // Security trend (past N days) - from security scans
+    // ---- securityTrend: monthly avg security score + issue totals ----
     const securityScans = await db.securityScan.findMany({
-      where: {
-        createdAt: { gte: since },
-      },
+      where: { createdAt: { gte: since } },
       select: {
         createdAt: true,
         totalIssues: true,
@@ -26,57 +36,66 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "asc" },
     });
 
-    // Group security scans by day
-    const securityTrend: {
-      date: string;
-      totalIssues: number;
-      critical: number;
-      high: number;
-      medium: number;
-      low: number;
-    }[] = [];
-
-    const secDayMap = new Map<
+    const monthMap = new Map<
       string,
-      { totalIssues: number; critical: number; high: number; medium: number; low: number }
+      {
+        totalIssues: number;
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+        scoreSum: number;
+        scanCount: number;
+      }
     >();
 
     for (const scan of securityScans) {
-      const dayKey = scan.createdAt.toISOString().split("T")[0];
-      const existing = secDayMap.get(dayKey) ?? {
-        totalIssues: 0,
-        critical: 0,
-        high: 0,
-        medium: 0,
-        low: 0,
-      };
+      const d = scan.createdAt;
+      const period = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      const existing =
+        monthMap.get(period) ?? {
+          totalIssues: 0,
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          scoreSum: 0,
+          scanCount: 0,
+        };
       existing.totalIssues += scan.totalIssues;
       existing.critical += scan.critical;
       existing.high += scan.high;
       existing.medium += scan.medium;
       existing.low += scan.low;
-      secDayMap.set(dayKey, existing);
+      existing.scoreSum += scanSecurityScore(scan);
+      existing.scanCount += 1;
+      monthMap.set(period, existing);
     }
 
-    for (const [date, data] of secDayMap) {
-      securityTrend.push({ date, ...data });
-    }
+    const securityTrend = Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([period, v]) => ({
+        period,
+        avgSecurityScore: v.scanCount > 0 ? Math.round(v.scoreSum / v.scanCount) : 100,
+        totalIssues: v.totalIssues,
+        critical: v.critical,
+        high: v.high,
+        medium: v.medium,
+        low: v.low,
+      }));
 
-    // Category breakdown (security, style, logic, performance counts)
-    const categoryBreakdown = await db.reviewComment.groupBy({
+    // ---- categoryBreakdown: ReviewComment grouped by category ----
+    const categoryGroups = await db.reviewComment.groupBy({
       by: ["category"],
       _count: { category: true },
       orderBy: { _count: { category: "desc" } },
     });
+    const categoryBreakdown = categoryGroups.map((c) => ({
+      category: c.category,
+      count: c._count.category,
+    }));
 
-    // Severity breakdown
-    const severityBreakdown = await db.reviewComment.groupBy({
-      by: ["severity"],
-      _count: { severity: true },
-      orderBy: { _count: { severity: "desc" } },
-    });
-
-    // Team stats - per-developer contribution
+    // ---- teamStats: per PR-author, reviews / issuesFound / avgRisk ----
     const pullRequests = await db.pullRequest.findMany({
       select: {
         authorLogin: true,
@@ -84,105 +103,66 @@ export async function GET(request: NextRequest) {
         reviews: {
           select: {
             riskScore: true,
-            status: true,
-            comments: {
-              select: { severity: true, category: true },
-            },
+            _count: { select: { comments: true } },
           },
         },
       },
     });
 
-    // Aggregate per author
+    // Map known app users (login -> name) so teamStats can carry a display name.
+    const users = await db.user.findMany({ select: { login: true, name: true } });
+    const nameByLogin = new Map<string, string | null>();
+    for (const u of users) nameByLogin.set(u.login, u.name);
+
     const authorMap = new Map<
       string,
       {
-        authorLogin: string;
-        authorAvatar: string | null;
-        prsCreated: number;
-        totalReviews: number;
-        avgRiskScore: number;
+        login: string;
+        avatarUrl: string | null;
+        reviews: number;
+        issuesFound: number;
         riskScores: number[];
-        issuesByCategory: Record<string, number>;
-        issuesBySeverity: Record<string, number>;
       }
     >();
 
     for (const pr of pullRequests) {
-      const existing = authorMap.get(pr.authorLogin) ?? {
-        authorLogin: pr.authorLogin,
-        authorAvatar: pr.authorAvatar,
-        prsCreated: 0,
-        totalReviews: 0,
-        avgRiskScore: 0,
-        riskScores: [],
-        issuesByCategory: {} as Record<string, number>,
-        issuesBySeverity: {} as Record<string, number>,
-      };
-
-      existing.prsCreated++;
-
+      const existing =
+        authorMap.get(pr.authorLogin) ?? {
+          login: pr.authorLogin,
+          avatarUrl: pr.authorAvatar,
+          reviews: 0,
+          issuesFound: 0,
+          riskScores: [],
+        };
       for (const review of pr.reviews) {
-        existing.totalReviews++;
-        if (review.riskScore !== null) {
-          existing.riskScores.push(review.riskScore);
-        }
-        for (const comment of review.comments) {
-          existing.issuesByCategory[comment.category] =
-            (existing.issuesByCategory[comment.category] ?? 0) + 1;
-          existing.issuesBySeverity[comment.severity] =
-            (existing.issuesBySeverity[comment.severity] ?? 0) + 1;
-        }
+        existing.reviews += 1;
+        existing.issuesFound += review._count.comments;
+        if (review.riskScore !== null) existing.riskScores.push(review.riskScore);
       }
-
       authorMap.set(pr.authorLogin, existing);
     }
 
-    const teamStats = Array.from(authorMap.values()).map((author) => ({
-      authorLogin: author.authorLogin,
-      authorAvatar: author.authorAvatar,
-      prsCreated: author.prsCreated,
-      totalReviews: author.totalReviews,
-      avgRiskScore:
-        author.riskScores.length > 0
-          ? Math.round(
-              (author.riskScores.reduce((a, b) => a + b, 0) /
-                author.riskScores.length) *
-                10
-            ) / 10
-          : null,
-      issuesByCategory: author.issuesByCategory,
-      issuesBySeverity: author.issuesBySeverity,
-    }));
-
-    // Review model usage
-    const modelUsage = await db.review.groupBy({
-      by: ["modelUsed"],
-      _count: { modelUsed: true },
-      where: { modelUsed: { not: null } },
-    });
+    const teamStats = Array.from(authorMap.values())
+      .map((a) => ({
+        login: a.login,
+        name: nameByLogin.get(a.login) ?? null,
+        avatarUrl: a.avatarUrl,
+        reviews: a.reviews,
+        issuesFound: a.issuesFound,
+        avgRisk:
+          a.riskScores.length > 0
+            ? Math.round((a.riskScores.reduce((x, y) => x + y, 0) / a.riskScores.length) * 10) / 10
+            : null,
+      }))
+      .sort((x, y) => y.reviews - x.reviews);
 
     return NextResponse.json({
       securityTrend,
-      categoryBreakdown: categoryBreakdown.map((c) => ({
-        category: c.category,
-        count: c._count.category,
-      })),
-      severityBreakdown: severityBreakdown.map((s) => ({
-        severity: s.severity,
-        count: s._count.severity,
-      })),
+      categoryBreakdown,
       teamStats,
-      modelUsage: modelUsage.map((m) => ({
-        model: m.modelUsed,
-        count: m._count.modelUsed,
-      })),
     });
   } catch (error) {
     console.error("Error fetching analytics:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch analytics" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch analytics" }, { status: 500 });
   }
 }

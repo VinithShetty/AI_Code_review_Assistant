@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createHmac } from "crypto";
 
+export const runtime = "nodejs";
+
 // POST /api/webhooks/github - GitHub webhook handler
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +36,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle different event types
+    if (eventType === "installation" || eventType === "installation_repositories") {
+      return await handleInstallationEvent(payload);
+    }
+
     if (eventType === "pull_request") {
       const action = payload.action as string;
       const pr = payload.pull_request as Record<string, unknown> | undefined;
@@ -97,6 +103,20 @@ async function handlePullRequestEvent(
       { error: "Repository not connected", fullName: repoFullName },
       { status: 404 }
     );
+  }
+
+  // If this webhook came from a GitHub App installation, store the installation id.
+  const installation = payload.installation as Record<string, unknown> | undefined;
+  const installationId = installation?.id as number | undefined;
+  if (installationId && !repository.githubInstallationId) {
+    try {
+      await db.repository.update({
+        where: { id: repository.id },
+        data: { githubInstallationId: installationId },
+      });
+    } catch (error) {
+      console.warn("Failed to update repository installation id:", error);
+    }
   }
 
   // Extract PR details
@@ -195,4 +215,50 @@ async function handlePullRequestEvent(
       status: review.status,
     },
   });
+}
+
+async function handleInstallationEvent(payload: Record<string, unknown>) {
+  const installation = payload.installation as Record<string, unknown> | undefined;
+  const id = installation?.id as number | undefined;
+  const account = installation?.account as Record<string, unknown> | undefined;
+  const accountLogin = (account?.login as string) ?? "unknown";
+  const accountType = (account?.type as string) ?? undefined;
+
+  if (!id) {
+    return NextResponse.json({ error: "Missing installation.id" }, { status: 400 });
+  }
+
+  const repos =
+    (payload.repositories as Array<Record<string, unknown>> | undefined) ??
+    (payload.repositories_added as Array<Record<string, unknown>> | undefined) ??
+    undefined;
+
+  try {
+    await db.gitHubInstallation.upsert({
+      where: { installationId: id },
+      create: {
+        installationId: id,
+        accountLogin,
+        accountType,
+        repositoriesJson: repos ? JSON.stringify(repos) : null,
+      },
+      update: {
+        accountLogin,
+        accountType,
+        repositoriesJson: repos ? JSON.stringify(repos) : undefined,
+      },
+    });
+
+    await db.analyticsEvent.create({
+      data: {
+        eventType: "github_app_installation",
+        metadata: JSON.stringify({ installationId: id, accountLogin, accountType }),
+      },
+    });
+
+    return NextResponse.json({ message: "Installation event recorded", installationId: id });
+  } catch (error) {
+    console.error("Error recording installation event:", error);
+    return NextResponse.json({ error: "Failed to record installation" }, { status: 500 });
+  }
 }

@@ -11,8 +11,9 @@ import {
   GitBranch,
   Sparkles,
 } from 'lucide-react';
-import { useAppStore } from '@/stores/appStore';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 
 const features = [
   {
@@ -51,7 +52,7 @@ const stats = [
 ];
 
 export default function HeroSection() {
-  const { login } = useAppStore();
+  const router = useRouter();
 
   return (
     <section className="relative min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center px-4 py-20 overflow-hidden">
@@ -73,6 +74,21 @@ export default function HeroSection() {
 
       {/* Content */}
       <div className="relative z-10 max-w-5xl mx-auto text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="flex justify-center mb-6"
+        >
+          <Image
+            src="/codereview-logo.png"
+            alt="CodeReview AI logo"
+            width={88}
+            height={88}
+            className="rounded-2xl"
+            priority
+          />
+        </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -118,9 +134,7 @@ export default function HeroSection() {
           <Button
             size="lg"
             className="bg-emerald-600 hover:bg-emerald-700 text-white text-base px-8 h-12 gap-2"
-            onClick={() =>
-              login({ login: 'developer', avatarUrl: '' })
-            }
+            onClick={() => router.push('/login')}
           >
             <Code2 className="h-5 w-5" />
             Get Started with GitHub

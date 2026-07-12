@@ -3,9 +3,10 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 2>&1 | tee dev.log",
-    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
-    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
+    "dev": "next dev -p 3000",
+    "dev:win": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $lockPath = '.next/dev/lock'; if (Test-Path $lockPath) { try { $lockJson = Get-Content $lockPath -Raw | ConvertFrom-Json; $lockProcId = [int]$lockJson.pid; if (-not (Get-Process -Id $lockProcId -ErrorAction SilentlyContinue)) { Remove-Item $lockPath -Force -ErrorAction SilentlyContinue } } catch { } }; $conns = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if ($conns) { $procIds = $conns.OwningProcess | Sort-Object -Unique; foreach ($procId in $procIds) { try { Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue } catch { } } }; npm run dev\"",
+    "build": "next build",
+    "start": "next start -p 3000",
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",

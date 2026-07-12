@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getRepoByFullName } from "@/lib/github-api";
+
+export const runtime = "nodejs";
 
 // GET /api/repos - List all repositories with stats
 export async function GET(request: NextRequest) {
@@ -74,7 +77,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { fullName } = body;
+    const { fullName, installationId: installationIdFromBody } = body as {
+      fullName?: unknown;
+      installationId?: unknown;
+    };
 
     if (!fullName || typeof fullName !== "string") {
       return NextResponse.json(
@@ -106,6 +112,45 @@ export async function POST(request: NextRequest) {
 
     const [ownerName, repoName] = parts;
 
+    // Determine installation id
+    let installationId: number | null = null;
+    if (typeof installationIdFromBody === "number" && Number.isFinite(installationIdFromBody)) {
+      installationId = installationIdFromBody;
+    } else {
+      const installation = await db.gitHubInstallation.findFirst({
+        where: { accountLogin: ownerName },
+        orderBy: { updatedAt: "desc" },
+      });
+      installationId = installation?.installationId ?? null;
+
+      if (!installationId) {
+        const fallback = process.env.GITHUB_DEFAULT_INSTALLATION_ID;
+        if (fallback) {
+          const parsed = Number(fallback);
+          if (Number.isFinite(parsed) && parsed > 0) installationId = parsed;
+        }
+      }
+    }
+
+    if (!installationId) {
+      return NextResponse.json(
+        {
+          error: "Missing GitHub App installationId for this owner.",
+          hint:
+            "Install your GitHub App on the org/user, ensure installation webhooks are delivered to /api/webhooks/github, or pass { installationId } in the request body.",
+          owner: ownerName,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Fetch repo details from GitHub using the GitHub App installation token
+    const ghRepo = await getRepoByFullName({
+      installationId,
+      owner: ownerName,
+      repo: repoName,
+    });
+
     // Find or create a default owner user
     let owner = await db.user.findFirst({
       where: { login: ownerName },
@@ -121,19 +166,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Generate a mock githubRepoId (in production this would come from GitHub API)
-    const githubRepoId = Math.floor(Math.random() * 100000000);
-
     const repository = await db.repository.create({
       data: {
         ownerId: owner.id,
-        githubRepoId,
-        fullName,
-        name: repoName,
-        description: `Connected repository: ${fullName}`,
-        language: null,
-        isPrivate: false,
-        stars: 0,
+        githubRepoId: ghRepo.id,
+        githubInstallationId: installationId,
+        fullName: ghRepo.full_name,
+        name: ghRepo.name,
+        description: ghRepo.description ?? `Connected repository: ${ghRepo.full_name}`,
+        language: ghRepo.language,
+        isPrivate: ghRepo.private,
+        stars: ghRepo.stargazers_count ?? 0,
         openPrs: 0,
       },
       include: {
@@ -152,7 +195,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error connecting repository:", error);
     return NextResponse.json(
-      { error: "Failed to connect repository" },
+      {
+        error: "Failed to connect repository",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

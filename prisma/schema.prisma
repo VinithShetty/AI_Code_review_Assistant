@@ -28,6 +28,7 @@ model Repository {
   ownerId       String
   owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   githubRepoId  Int      @unique
+  githubInstallationId Int?
   fullName      String
   name          String
   description   String?
@@ -41,6 +42,16 @@ model Repository {
 
   pullRequests PullRequest[]
   securityScans SecurityScan[]
+}
+
+model GitHubInstallation {
+  id               String   @id @default(uuid())
+  installationId   Int      @unique
+  accountLogin     String
+  accountType      String?
+  repositoriesJson String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model PullRequest {
