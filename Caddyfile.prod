@@ -1,0 +1,7 @@
+# Production reverse proxy with automatic HTTPS (Let's Encrypt / ZeroSSL).
+# {$DOMAIN} is read from the caddy container's environment (.env.production).
+
+{$DOMAIN} {
+	encode gzip zstd
+	reverse_proxy web:3000
+}

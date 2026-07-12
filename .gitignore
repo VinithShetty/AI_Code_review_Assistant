@@ -54,3 +54,6 @@ server.log
 /skills/
 # local SQLite database (kept local, never committed)
 db/*.db
+
+# keep the production env TEMPLATE (real .env files stay ignored above)
+!.env.production.example

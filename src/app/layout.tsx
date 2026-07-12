@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000"),
   title: "CodeReview AI — AI-Powered Code Review Assistant",
   description:
     "Catch security vulnerabilities, logic errors, and performance issues before they reach production with AI-driven code analysis.",

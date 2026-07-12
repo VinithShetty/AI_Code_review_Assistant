@@ -1,0 +1,53 @@
+# Production deployment — CodeReview AI (Next.js) behind Caddy (automatic HTTPS).
+#
+# Deploy:
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# The web app is NOT published to the host directly; Caddy terminates TLS on
+# 80/443 and reverse-proxies to the web container. SQLite lives on a named volume.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfiles/Dockerfile.web.prod
+    container_name: crev-web
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      # SQLite on a persistent named volume; absolute path (no relative ambiguity).
+      - DATABASE_URL=file:/app/db/prod.db
+    volumes:
+      - crev_db:/app/db
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: crev-caddy
+    restart: unless-stopped
+    # env_file provides DOMAIN, which Caddyfile.prod reads as {$DOMAIN}.
+    env_file:
+      - .env.production
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  crev_db:
+  caddy_data:
+  caddy_config:
