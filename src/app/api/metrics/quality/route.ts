@@ -100,6 +100,7 @@ export async function GET() {
         fullName: string;
         reviewCount: number;
         avgRisk: number;
+        riskSum: number;
         issueCount: number;
         qualityScore: number;
       }
@@ -122,7 +123,7 @@ export async function GET() {
       existing.riskSum += review.riskScore ?? 0;
       existing.issueCount += review.comments.length;
 
-      repoScores.set(repoId, existing as typeof existing & { riskSum: number });
+      repoScores.set(repoId, existing);
     }
 
     const repoQualityScores = Array.from(repoScores.entries()).map(

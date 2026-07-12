@@ -1,0 +1,20 @@
+# Installed fresh inside the image
+node_modules
+.next
+out
+
+# VCS
+.git
+
+# Local database + secrets — never bake into the image
+db
+*.db
+.env
+.env.*
+
+# Misc / editor / logs
+*.log
+npm-debug.log*
+.DS_Store
+.vscode
+.idea

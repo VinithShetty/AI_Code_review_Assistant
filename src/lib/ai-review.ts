@@ -66,10 +66,11 @@ Provide a thorough code review focusing on:
 Return ONLY valid JSON, no additional text.`;
 
   try {
-    // Use z-ai-web-dev-sdk
-    const { createChatCompletion } = await import("z-ai-web-dev-sdk");
+    // Use z-ai-web-dev-sdk (default export is the ZAI class).
+    const ZAI = (await import("z-ai-web-dev-sdk")).default;
+    const zai = await ZAI.create();
 
-    const response = await createChatCompletion({
+    const response = await zai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },

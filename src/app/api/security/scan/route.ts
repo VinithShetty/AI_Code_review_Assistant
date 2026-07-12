@@ -42,12 +42,12 @@ export async function POST(request: NextRequest) {
     // Combine findings
     const allFindings = [
       ...secretFindings.map((f) => ({
-        type: "secret" as const,
         ...f,
+        type: "secret" as const,
       })),
       ...owaspFindings.map((f) => ({
-        type: "owasp" as const,
         ...f,
+        type: "owasp" as const,
       })),
     ];
 
