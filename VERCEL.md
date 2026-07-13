@@ -42,6 +42,7 @@ This creates all the tables in your Neon database.
    | `NEXTAUTH_SECRET` | output of `openssl rand -base64 32` |
    | `GITHUB_CLIENT_ID` | from your GitHub OAuth App |
    | `GITHUB_CLIENT_SECRET` | from your GitHub OAuth App |
+   | `GROQ_API_KEY` | free key from https://console.groq.com — **powers the AI reviews** |
 
    (Leave `NEXTAUTH_URL` for step 4 — you need the deployed URL first.)
 
@@ -71,6 +72,9 @@ Open your Vercel URL → **Continue with GitHub** → connect a repo → run a r
   plenty here.
 - **Auto-deploy:** every push to `main` redeploys automatically. If you change the
   Prisma schema, re-run the `prisma db push` from step 2.
+- **AI provider:** reviews run on **Groq** (free, OpenAI-compatible) — get a key at
+  https://console.groq.com and set `GROQ_API_KEY`. To use a different provider, set
+  `AI_BASE_URL` + `AI_MODEL` (any OpenAI-compatible endpoint).
 - **AI reviews** are capped at ~60s per request (Vercel Hobby limit) — fine for
   normal PRs; a very large diff may fall back gracefully.
 - **Local dev** now needs a Postgres `DATABASE_URL` too (point it at Neon, or run a

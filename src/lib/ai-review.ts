@@ -66,25 +66,39 @@ Provide a thorough code review focusing on:
 Return ONLY valid JSON, no additional text.`;
 
   try {
-    // Use z-ai-web-dev-sdk (default export is the ZAI class).
-    const ZAI = (await import("z-ai-web-dev-sdk")).default;
-    const zai = await ZAI.create();
+    // Call an OpenAI-compatible chat API. Defaults to Groq (free + fast).
+    // Configure via env: AI_API_KEY (or GROQ_API_KEY); optionally AI_BASE_URL
+    // and AI_MODEL to point at any other OpenAI-compatible provider.
+    const apiKey = process.env.AI_API_KEY ?? process.env.GROQ_API_KEY;
+    const baseUrl = process.env.AI_BASE_URL ?? "https://api.groq.com/openai/v1";
+    const model = process.env.AI_MODEL ?? "llama-3.3-70b-versatile";
+    if (!apiKey) {
+      throw new Error("Missing AI_API_KEY (or GROQ_API_KEY) environment variable.");
+    }
 
-    const response = await zai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 4096,
+    const apiRes = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.3,
+        max_tokens: 4096,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      }),
     });
 
-    // Extract the content from the response
-    const content =
-      response.choices?.[0]?.message?.content ??
-      response?.content ??
-      (typeof response === "string" ? response : null);
+    if (!apiRes.ok) {
+      throw new Error(`AI API error ${apiRes.status}: ${(await apiRes.text()).slice(0, 200)}`);
+    }
+
+    const response = await apiRes.json();
+    const content: string | null = response.choices?.[0]?.message?.content ?? null;
 
     if (!content) {
       throw new Error("Empty response from AI");
@@ -113,7 +127,7 @@ Return ONLY valid JSON, no additional text.`;
       filePath: comment.filePath || filePath,
     }));
 
-    parsed.modelUsed = "gpt-4o";
+    parsed.modelUsed = model;
 
     return parsed;
   } catch (error) {
