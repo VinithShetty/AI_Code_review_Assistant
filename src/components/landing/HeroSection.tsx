@@ -144,6 +144,7 @@ export default function HeroSection() {
             variant="outline"
             size="lg"
             className="text-base px-8 h-12 border-border/50 hover:bg-muted/50"
+            onClick={() => router.push('/demo')}
           >
             View Demo
           </Button>
